@@ -1,0 +1,6 @@
+vscode:
+  extensions:
+    - axetroy.vscode-deno@3.4.1:ZYiiQtK1R0S34JgbTCIGJA==
+image:
+  file: .gitpod.Dockerfile
+
