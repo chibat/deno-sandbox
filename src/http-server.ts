@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@v0.39.0/http/server.ts";
+import { serve } from "https://deno.land/std@v0.40.0/http/server.ts";
 const s = serve({ port: 8000 });
 console.log("http://localhost:8000/");
 for await (const req of s) {
