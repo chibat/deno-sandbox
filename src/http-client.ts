@@ -14,15 +14,13 @@ class Header {
   }
 }
 
-/*
-class Response {
-  body: string | null = null;
-  contentLength: number | null = null;
-  transferEncoding: string | null = null;
-}
-*/
+export type Response = {
+  body: string | null;
+  contentLength: number | null;
+  transferEncoding: string | null;
+};
 
-async function request(hostname: string, path: string): Promise<string> {
+export async function request(hostname: string, path: string): Promise<Response> {
   const conn = await Deno.connectTls({ hostname: hostname, port: 443 });
   await Deno.writeAll(
     conn,
@@ -39,6 +37,8 @@ Accept: */*
 
   let contentLength: number = 0;
   let transferEncoding: string | null = null;
+  let body = "";
+
   while (true) {
     const lineResult = await reader.readLine();
     if (lineResult == null) {
@@ -56,7 +56,6 @@ Accept: */*
     }
   }
   // console.log("Content-Length: " + contentLength);
-  let body = "";
 
   if (contentLength) {
     const buf = new Uint8Array(contentLength);
@@ -98,18 +97,27 @@ Accept: */*
     body = decoder.decode(bodyUint8Array);
   }
   conn.close();
-  return new Promise<string>((resolve, _reject) => resolve(body));
+  return new Promise<Response>((resolve, _reject) =>
+    resolve(
+      {
+        body: body,
+        contentLength: contentLength,
+        transferEncoding: transferEncoding,
+      },
+    )
+  );
 }
 
 // normal
-//const hostname = "gist.githubusercontent.com";
-//const path = "/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
+const hostname = "gist.githubusercontent.com";
+const path =
+  "/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
 
 // chunk
-const hostname = "github.com";
-const path = "/";
+//const hostname = "github.com";
+//const path = "/";
 
-const body = await request(hostname, path);
-console.log("Body: " + body);
+const res = await request(hostname, path);
+console.log("Body: " + res.body);
 
 // deno run -A http-client.ts
