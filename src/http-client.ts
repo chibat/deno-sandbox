@@ -1,6 +1,6 @@
 import { BufReader } from "https://deno.land/std/io/bufio.ts";
 
-class Header {
+export class Header {
   static readonly CONTENT_LENGTH = "content-length";
   static readonly TRANSFER_ENCODING = "transfer-encoding";
 
@@ -14,18 +14,28 @@ class Header {
   }
 }
 
+export type Request = {
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  url: URL,
+  body?: string, // TODO
+  headers?: Header[] // TODO
+};
+
 export type Response = {
   body: string | null;
   contentLength: number | null;
   transferEncoding: string | null;
 };
 
-export async function request(hostname: string, path: string): Promise<Response> {
+export async function exchange(request: Request): Promise<Response> {
+
+  const hostname = request.url.hostname;
+
   const conn = await Deno.connectTls({ hostname: hostname, port: 443 });
   await Deno.writeAll(
     conn,
     new TextEncoder().encode(`
-GET ${path} HTTP/1.1
+${request.method} ${request.url.href} HTTP/1.1
 Host: ${hostname}
 Accept: */*
 
@@ -109,15 +119,13 @@ Accept: */*
 }
 
 // normal
-const hostname = "gist.githubusercontent.com";
-const path =
-  "/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
+const url = new URL("https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt");
 
 // chunk
-//const hostname = "github.com";
-//const path = "/";
+//const url = new URL("https://github.com/");
 
-const res = await request(hostname, path);
+const request: Request = { method: "GET", url: url};
+const res = await exchange(request);
 console.log("Body: " + res.body);
 
 // deno run -A http-client.ts
