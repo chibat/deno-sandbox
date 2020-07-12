@@ -2,37 +2,14 @@ import { BufReader } from "https://deno.land/std/io/bufio.ts";
 
 const DELIMITER = "\r\n";
 
-export class Header {
-  static readonly CONTENT_LENGTH = "content-length";
-  static readonly TRANSFER_ENCODING = "transfer-encoding";
-  static readonly HOST = "host";
-  static readonly ACCEPT = "accept";
-
-  readonly name: string;
-  readonly value: string;
-
-  constructor(lineOrName: string, value?: string | number) {
-    if (value) {
-      this.name = lineOrName;
-      this.value = value.toString();
-    } else {
-      const line = lineOrName;
-      const position = line.indexOf(":");
-      this.name = line.substring(0, position).trim().toLowerCase();
-      this.value = line.substring(position + 1).trim();
-    }
-  }
-
-  toString() {
-    return `${this.name}: ${this.value}${DELIMITER}`;
-  }
-}
+export type HeaderValue = string | number;
 
 export type Request = {
   method: "GET" | "POST" | "PUT" | "DELETE";
   url: URL;
   body?: string;
-  headers?: Map<string, string | number>;
+  headers?: Map<string, HeaderValue>;
+  proxy?: string; // TODO
 };
 
 export type Response = {
@@ -42,12 +19,61 @@ export type Response = {
 };
 
 export async function exchange(request: Request): Promise<Response> {
-  const requestMessage = new TextEncoder().encode(makeRequestMessage(request));
-  const conn = await Deno.connectTls(
-    { hostname: request.url.hostname, port: 443 },
-  );
-  await Deno.writeAll(conn, requestMessage);
 
+  const requestMessage = makeRequestMessage(request);
+
+  const conn =
+    await (request.url.protocol === "https:"
+      ? Deno.connectTls({ hostname: request.url.hostname, port: 443 })
+      : Deno.connect({ hostname: request.url.hostname, port: 80 }));
+
+  await Deno.writeAll(conn, new TextEncoder().encode(requestMessage));
+  const response = await makeResponse(conn);
+  conn.close();
+  return response;
+}
+
+class Header {
+  static readonly CONTENT_LENGTH = "content-length";
+  static readonly TRANSFER_ENCODING = "transfer-encoding";
+  static readonly HOST = "host";
+  static readonly ACCEPT = "accept";
+
+  readonly name: string;
+  readonly value: string;
+
+  constructor(line: string) {
+    const position = line.indexOf(":");
+    this.name = line.substring(0, position).trim().toLowerCase();
+    this.value = line.substring(position + 1).trim();
+  }
+}
+
+function makeRequestMessage(request: Request) {
+  const headerMap = request.headers ? request.headers : new Map();
+  const headerArray = new Array<string>();
+
+  if (!headerMap.has(Header.HOST)) {
+    headerMap.set(Header.HOST, request.url.hostname);
+  }
+  if (!headerMap.has(Header.ACCEPT)) {
+    headerMap.set(Header.ACCEPT, "*/*");
+  }
+  if (!headerMap.has(Header.CONTENT_LENGTH) && request.body) {
+    const requestBodyLength = (new Blob([request.body])).size;
+    headerMap.set(Header.CONTENT_LENGTH, requestBodyLength);
+  }
+  headerMap.forEach((value, key) =>
+    headerArray.push(`${key}: ${value}${DELIMITER}`)
+  );
+
+  return `${request.method} ${request.url.href} HTTP/1.1${DELIMITER}` +
+    headerArray.join("") +
+    DELIMITER +
+    (request.body ? request.body : "");
+}
+
+async function makeResponse(conn: Deno.Conn) {
   const reader = new BufReader(conn);
   const decoder = new TextDecoder("utf-8");
   let contentLength: number = 0;
@@ -111,40 +137,11 @@ export async function exchange(request: Request): Promise<Response> {
     }
     body = decoder.decode(bodyUint8Array);
   }
-  conn.close();
-  return new Promise<Response>((resolve, _reject) =>
-    resolve(
-      {
+  return {
         body: body,
         contentLength: contentLength,
         transferEncoding: transferEncoding,
-      },
-    )
-  );
-}
-
-function makeRequestMessage(request: Request) {
-  const headerMap = request.headers ? request.headers : new Map();
-  const headerArray = new Array<string>();
-
-  if (!headerMap.has(Header.HOST)) {
-    headerMap.set(Header.HOST, request.url.hostname);
-  }
-  if (!headerMap.has(Header.ACCEPT)) {
-    headerMap.set(Header.ACCEPT, "*/*");
-  }
-  if (!headerMap.has(Header.CONTENT_LENGTH) && request.body) {
-    const requestBodyLength = (new Blob([request.body])).size;
-    headerMap.set(Header.CONTENT_LENGTH, requestBodyLength);
-  }
-  headerMap.forEach((value, key) =>
-    headerArray.push(`${key}: ${value}${DELIMITER}`)
-  );
-
-  return `${request.method} ${request.url.href} HTTP/1.1${DELIMITER}` +
-    headerArray.join("") +
-    DELIMITER +
-    (request.body ? request.body : "");
+  };
 }
 
 // normal
