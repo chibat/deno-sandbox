@@ -6,26 +6,26 @@ export type HeaderValue = string | number;
 
 export type Request = {
   method: "GET" | "POST" | "PUT" | "DELETE";
-  url: URL;
+  url: URL | string;
   body?: string;
   headers?: Map<string, HeaderValue>;
   proxy?: string; // TODO
 };
 
 export type Response = {
-  body: string | null;
-  contentLength: number | null;
-  transferEncoding: string | null;
+  body: string;
+  status: number | null;
+  headers: Map<string, HeaderValue>;
 };
 
 export async function exchange(request: Request): Promise<Response> {
-
-  const requestMessage = makeRequestMessage(request);
+  const url = request.url instanceof URL ? request.url : new URL(request.url);
+  const requestMessage = makeRequestMessage(request, url);
 
   const conn =
-    await (request.url.protocol === "https:"
-      ? Deno.connectTls({ hostname: request.url.hostname, port: 443 })
-      : Deno.connect({ hostname: request.url.hostname, port: 80 }));
+    await (url.protocol === "https:"
+      ? Deno.connectTls({ hostname: url.hostname, port: 443 })
+      : Deno.connect({ hostname: url.hostname, port: 80 }));
 
   await Deno.writeAll(conn, new TextEncoder().encode(requestMessage));
   const response = await makeResponse(conn);
@@ -33,28 +33,19 @@ export async function exchange(request: Request): Promise<Response> {
   return response;
 }
 
-class Header {
+export class Header {
   static readonly CONTENT_LENGTH = "content-length";
   static readonly TRANSFER_ENCODING = "transfer-encoding";
   static readonly HOST = "host";
   static readonly ACCEPT = "accept";
-
-  readonly name: string;
-  readonly value: string;
-
-  constructor(line: string) {
-    const position = line.indexOf(":");
-    this.name = line.substring(0, position).trim().toLowerCase();
-    this.value = line.substring(position + 1).trim();
-  }
 }
 
-function makeRequestMessage(request: Request) {
+function makeRequestMessage(request: Request, url: URL) {
   const headerMap = request.headers ? request.headers : new Map();
   const headerArray = new Array<string>();
 
   if (!headerMap.has(Header.HOST)) {
-    headerMap.set(Header.HOST, request.url.hostname);
+    headerMap.set(Header.HOST, url.hostname);
   }
   if (!headerMap.has(Header.ACCEPT)) {
     headerMap.set(Header.ACCEPT, "*/*");
@@ -67,7 +58,7 @@ function makeRequestMessage(request: Request) {
     headerArray.push(`${key}: ${value}${DELIMITER}`)
   );
 
-  return `${request.method} ${request.url.href} HTTP/1.1${DELIMITER}` +
+  return `${request.method} ${url.href} HTTP/1.1${DELIMITER}` +
     headerArray.join("") +
     DELIMITER +
     (request.body ? request.body : "");
@@ -76,10 +67,14 @@ function makeRequestMessage(request: Request) {
 async function makeResponse(conn: Deno.Conn) {
   const reader = new BufReader(conn);
   const decoder = new TextDecoder("utf-8");
-  let contentLength: number = 0;
-  let transferEncoding: string | null = null;
   let body = "";
 
+  const lineResult = await reader.readLine();
+  const status = lineResult
+    ? Number.parseInt(decoder.decode((lineResult)?.line).split(" ")[1])
+    : null;
+
+  const headers = new Map<string, string>();
   while (true) {
     const lineResult = await reader.readLine();
     if (lineResult == null) {
@@ -88,21 +83,22 @@ async function makeResponse(conn: Deno.Conn) {
     if (lineResult.line.length === 0) {
       break;
     }
-    const header = new Header(decoder.decode(lineResult.line));
-    if (header.name === Header.CONTENT_LENGTH) {
-      contentLength = Number.parseInt(header.value, 10);
-    }
-    if (header.name === Header.TRANSFER_ENCODING) {
-      transferEncoding = header.value;
-    }
+
+    const line = decoder.decode(lineResult.line);
+    const position = line.indexOf(":");
+    const name = line.substring(0, position).trim().toLowerCase();
+    const value = line.substring(position + 1).trim();
+    headers.set(name, value);
   }
-  // console.log("Content-Length: " + contentLength);
+
+  const value = headers.get(Header.CONTENT_LENGTH);
+  const contentLength = value ? Number.parseInt(value, 10) : 0;
 
   if (contentLength) {
     const buf = new Uint8Array(contentLength);
     await reader.readFull(buf);
     body = decoder.decode(buf);
-  } else if (transferEncoding === "chunked") {
+  } else if (headers.get(Header.TRANSFER_ENCODING) === "chunked") {
     // chunk
 
     const chunkArray: Array<Uint8Array> = [];
@@ -129,31 +125,31 @@ async function makeResponse(conn: Deno.Conn) {
     const size = chunkArray.map((chunk) => chunk.length).reduce((arg1, arg2) =>
       arg1 + arg2
     );
-    const bodyUint8Array = new Uint8Array(size);
+    const bodyArray = new Uint8Array(size);
     let position = 0;
     for (const chunk of chunkArray) {
-      bodyUint8Array.set(chunk, position);
+      bodyArray.set(chunk, position);
       position += chunk.length;
     }
-    body = decoder.decode(bodyUint8Array);
+    body = decoder.decode(bodyArray);
   }
   return {
-        body: body,
-        contentLength: contentLength,
-        transferEncoding: transferEncoding,
+    status: status,
+    body: body,
+    headers: headers,
   };
 }
 
 // normal
-//const url = new URL(
-//  "https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt",
-//);
+//const url =
+//  "https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
 
 // chunk
-const url = new URL("https://github.com/");
+const url = "https://github.com/";
 
 const request: Request = { method: "GET", url: url };
 const res = await exchange(request);
+console.log("Status: " + res.status);
 console.log("Body: " + res.body);
 
 // deno run -A http-client.ts
