@@ -24,8 +24,8 @@ export async function exchange(request: Request): Promise<Response> {
 
   const conn =
     await (url.protocol === "https:"
-      ? Deno.connectTls({ hostname: url.hostname, port: 443 })
-      : Deno.connect({ hostname: url.hostname, port: 80 }));
+      ? Deno.connectTls({ hostname: url.hostname, port: url.port ? Number.parseInt(url.port) : 443 })
+      : Deno.connect({ hostname: url.hostname, port: url.port ? Number.parseInt(url.port) : 80 }));
 
   await Deno.writeAll(conn, new TextEncoder().encode(requestMessage));
   const response = await makeResponse(conn);
