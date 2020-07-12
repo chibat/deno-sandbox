@@ -1,24 +1,38 @@
 import { BufReader } from "https://deno.land/std/io/bufio.ts";
 
+const DELIMITER = "\r\n";
+
 export class Header {
   static readonly CONTENT_LENGTH = "content-length";
   static readonly TRANSFER_ENCODING = "transfer-encoding";
+  static readonly HOST = "host";
+  static readonly ACCEPT = "accept";
 
   readonly name: string;
   readonly value: string;
 
-  constructor(line: string) {
-    const position = line.indexOf(":");
-    this.name = line.substring(0, position).trim().toLowerCase();
-    this.value = line.substring(position + 1).trim();
+  constructor(lineOrName: string, value?: string | number) {
+    if (value) {
+      this.name = lineOrName;
+      this.value = value.toString();
+    } else {
+      const line = lineOrName;
+      const position = line.indexOf(":");
+      this.name = line.substring(0, position).trim().toLowerCase();
+      this.value = line.substring(position + 1).trim();
+    }
+  }
+
+  toString() {
+    return `${this.name}: ${this.value}${DELIMITER}`;
   }
 }
 
 export type Request = {
-  method: "GET" | "POST" | "PUT" | "DELETE",
-  url: URL,
-  body?: string, // TODO
-  headers?: Header[] // TODO
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  url: URL;
+  body?: string;
+  headers?: Map<string, string | number>;
 };
 
 export type Response = {
@@ -28,23 +42,14 @@ export type Response = {
 };
 
 export async function exchange(request: Request): Promise<Response> {
-
-  const hostname = request.url.hostname;
-
-  const conn = await Deno.connectTls({ hostname: hostname, port: 443 });
-  await Deno.writeAll(
-    conn,
-    new TextEncoder().encode(`
-${request.method} ${request.url.href} HTTP/1.1
-Host: ${hostname}
-Accept: */*
-
-`),
+  const requestMessage = new TextEncoder().encode(makeRequestMessage(request));
+  const conn = await Deno.connectTls(
+    { hostname: request.url.hostname, port: 443 },
   );
+  await Deno.writeAll(conn, requestMessage);
 
   const reader = new BufReader(conn);
   const decoder = new TextDecoder("utf-8");
-
   let contentLength: number = 0;
   let transferEncoding: string | null = null;
   let body = "";
@@ -118,13 +123,39 @@ Accept: */*
   );
 }
 
+function makeRequestMessage(request: Request) {
+  const headerMap = request.headers ? request.headers : new Map();
+  const headerArray = new Array<string>();
+
+  if (!headerMap.has(Header.HOST)) {
+    headerMap.set(Header.HOST, request.url.hostname);
+  }
+  if (!headerMap.has(Header.ACCEPT)) {
+    headerMap.set(Header.ACCEPT, "*/*");
+  }
+  if (!headerMap.has(Header.CONTENT_LENGTH) && request.body) {
+    const requestBodyLength = (new Blob([request.body])).size;
+    headerMap.set(Header.CONTENT_LENGTH, requestBodyLength);
+  }
+  headerMap.forEach((value, key) =>
+    headerArray.push(`${key}: ${value}${DELIMITER}`)
+  );
+
+  return `${request.method} ${request.url.href} HTTP/1.1${DELIMITER}` +
+    headerArray.join("") +
+    DELIMITER +
+    (request.body ? request.body : "");
+}
+
 // normal
-const url = new URL("https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt");
+//const url = new URL(
+//  "https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt",
+//);
 
 // chunk
-//const url = new URL("https://github.com/");
+const url = new URL("https://github.com/");
 
-const request: Request = { method: "GET", url: url};
+const request: Request = { method: "GET", url: url };
 const res = await exchange(request);
 console.log("Body: " + res.body);
 
