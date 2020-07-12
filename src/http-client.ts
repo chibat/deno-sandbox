@@ -9,7 +9,7 @@ export type Request = {
   url: URL | string;
   body?: string;
   headers?: Map<string, HeaderValue>;
-  proxy?: string; // TODO
+  proxy?: URL | string;
 };
 
 export type Response = {
@@ -20,17 +20,57 @@ export type Response = {
 
 export async function exchange(request: Request): Promise<Response> {
   const url = request.url instanceof URL ? request.url : new URL(request.url);
-  const requestMessage = makeRequestMessage(request, url);
+
+  const proxyUrl = !request.proxy
+    ? null
+    : request.proxy instanceof URL
+    ? request.proxy
+    : new URL(request.proxy);
+
+  const connectUrl = proxyUrl ? proxyUrl : url;
+  const tsl = connectUrl.protocol === "https:";
+
+  const connectPort = connectUrl.port
+    ? Number.parseInt(connectUrl.port)
+    : tsl
+    ? 443
+    : 80;
+
+  const connectParam = { hostname: connectUrl.hostname, port: connectPort };
 
   const conn =
-    await (url.protocol === "https:"
-      ? Deno.connectTls({ hostname: url.hostname, port: url.port ? Number.parseInt(url.port) : 443 })
-      : Deno.connect({ hostname: url.hostname, port: url.port ? Number.parseInt(url.port) : 80 }));
+    await (tsl ? Deno.connectTls(connectParam) : Deno.connect(connectParam));
 
+  const reader = new BufReader(conn);
+
+  if (proxyUrl) {
+    await connectProxy(connectUrl, conn, reader);
+  }
+
+  const requestMessage = makeRequestMessage(request, url);
+  console.debug(requestMessage);
   await Deno.writeAll(conn, new TextEncoder().encode(requestMessage));
-  const response = await makeResponse(conn);
+  const response = await makeResponse(reader);
   conn.close();
   return response;
+}
+
+async function connectProxy(url: URL, conn: Deno.Conn, reader: BufReader) {
+
+  const requestLine =
+    `CONNECT ${url.hostname}:${url.port} HTTP/1.1${DELIMITER}${DELIMITER}`;
+
+  console.debug(requestLine);
+  await Deno.writeAll(conn, new TextEncoder().encode(requestLine));
+  while (true) {
+    const lineResult = await reader.readLine();
+    if (lineResult == null) {
+      break;
+    }
+    if (lineResult.line.length === 0) {
+      break;
+    }
+  }
 }
 
 export class Header {
@@ -64,8 +104,7 @@ function makeRequestMessage(request: Request, url: URL) {
     (request.body ? request.body : "");
 }
 
-async function makeResponse(conn: Deno.Conn) {
-  const reader = new BufReader(conn);
+async function makeResponse(reader: BufReader) {
   const decoder = new TextDecoder("utf-8");
   let body = "";
 
@@ -133,6 +172,7 @@ async function makeResponse(conn: Deno.Conn) {
     }
     body = decoder.decode(bodyArray);
   }
+  console.debug(status);
   return {
     status: status,
     body: body,
@@ -141,11 +181,11 @@ async function makeResponse(conn: Deno.Conn) {
 }
 
 // normal
-//const url =
-//  "https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
+const url =
+  "https://gist.githubusercontent.com/chibat/b207260420c1b85012036ffc6743f427/raw/16d7a15460df1d40596b2e6a151fd2604ea10afd/hello.txt";
 
 // chunk
-const url = "https://github.com/";
+//const url = "https://github.com/";
 
 const request: Request = { method: "GET", url: url };
 const res = await exchange(request);
