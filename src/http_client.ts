@@ -19,7 +19,8 @@ export type Response = {
 };
 
 export async function exchange(request: Request): Promise<Response> {
-  const url = request.url instanceof URL ? request.url : new URL(request.url);
+
+  const endpointUrl = request.url instanceof URL ? request.url : new URL(request.url);
 
   const proxyUrl = !request.proxy
     ? null
@@ -27,27 +28,28 @@ export async function exchange(request: Request): Promise<Response> {
     ? request.proxy
     : new URL(request.proxy);
 
-  const connectUrl = proxyUrl ? proxyUrl : url;
-  const tsl = connectUrl.protocol === "https:";
+  const connectUrl = proxyUrl ? proxyUrl : endpointUrl;
+  const connectTls = connectUrl.protocol === "https:";
 
   const connectPort = connectUrl.port
     ? Number.parseInt(connectUrl.port)
-    : tsl
+    : connectTls
     ? 443
     : 80;
 
   const connectParam = { hostname: connectUrl.hostname, port: connectPort };
 
   const conn =
-    await (tsl ? Deno.connectTls(connectParam) : Deno.connect(connectParam));
+    await (connectTls ? Deno.connectTls(connectParam) : Deno.connect(connectParam));
 
   const reader = new BufReader(conn);
 
-  if (proxyUrl) {
-    await connectProxy(connectUrl, conn, reader);
+  const endpointTls = endpointUrl.protocol === "https:" && !proxyUrl;
+  if (proxyUrl && endpointTls) {
+    await connectProxy(endpointUrl, conn, reader);
   }
 
-  const requestMessage = makeRequestMessage(request, url);
+  const requestMessage = makeRequestMessage(request, endpointUrl);
   console.debug(requestMessage);
   await Deno.writeAll(conn, new TextEncoder().encode(requestMessage));
   const response = await makeResponse(reader);
