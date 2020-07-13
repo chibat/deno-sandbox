@@ -44,7 +44,7 @@ export async function exchange(request: Request): Promise<Response> {
 
   const reader = new BufReader(conn);
 
-  const endpointTls = endpointUrl.protocol === "https:" && !proxyUrl;
+  const endpointTls = endpointUrl.protocol === "https:";
   if (proxyUrl && endpointTls) {
     await connectProxy(endpointUrl, conn, reader);
   }
