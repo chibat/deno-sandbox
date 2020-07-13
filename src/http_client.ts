@@ -59,8 +59,10 @@ export async function exchange(request: Request): Promise<Response> {
 
 async function connectProxy(url: URL, conn: Deno.Conn, reader: BufReader) {
 
+  const port = url.port ? url.port : url.protocol === "https:" ? 443 : 80;
+
   const requestLine =
-    `CONNECT ${url.hostname}:${url.port} HTTP/1.1${DELIMITER}${DELIMITER}`;
+    `CONNECT ${url.hostname}:${port} HTTP/1.1${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
   await Deno.writeAll(conn, new TextEncoder().encode(requestLine));
