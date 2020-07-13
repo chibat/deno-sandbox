@@ -75,6 +75,8 @@ async function connectProxy(url: URL, conn: Deno.Conn, reader: BufReader) {
       break;
     }
   }
+
+  // TODO if 200 response, start TLS
 }
 
 export class Header {
