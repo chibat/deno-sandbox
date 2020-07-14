@@ -4,12 +4,18 @@ const DELIMITER = "\r\n";
 
 export type HeaderValue = string | number;
 
+type Proxy = {
+  hostname: string,
+  port: number,
+  username: string,
+  password: string
+}
+
 export type Request = {
   method: "GET" | "POST" | "PUT" | "DELETE";
   url: URL | string;
   body?: string;
   headers?: Map<string, HeaderValue>;
-  proxy?: {hostname: string, port: number};
 };
 
 export type Response = {
@@ -18,13 +24,13 @@ export type Response = {
   headers: Map<string, HeaderValue>;
 };
 
-export async function exchange(request: Request): Promise<Response> {
+export async function exchange(request: Request, proxy?: Proxy): Promise<Response> {
 
   const endpointUrl = request.url instanceof URL ? request.url : new URL(request.url);
-  const connectTls = !request.proxy && endpointUrl.protocol === "https:";
-  const connectHostname = request.proxy ? request.proxy.hostname : endpointUrl.hostname;
+  const connectTls = !proxy && endpointUrl.protocol === "https:";
+  const connectHostname = proxy ? proxy.hostname : endpointUrl.hostname;
 
-  const connectPort = request.proxy ? request.proxy.port : endpointUrl.port
+  const connectPort = proxy ? proxy.port : endpointUrl.port
     ? Number.parseInt(endpointUrl.port)
     : (endpointUrl.protocol === "https:")
     ? 443
@@ -38,8 +44,8 @@ export async function exchange(request: Request): Promise<Response> {
   const reader = new BufReader(conn);
 
   const endpointTls = endpointUrl.protocol === "https:";
-  if (request.proxy && endpointTls) {
-    conn = await connectProxy(endpointUrl, request.proxy.hostname, conn, reader);
+  if (proxy && endpointTls) {
+    conn = await connectProxy(endpointUrl, proxy.hostname, conn, reader);
   }
 
   const requestMessage = makeRequestMessage(request, endpointUrl);
