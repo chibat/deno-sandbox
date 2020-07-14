@@ -1,4 +1,4 @@
-import { BufReader } from "https://deno.land/std/io/bufio.ts";
+import { BufReader } from "https://deno.land/std@0.61.0/io/bufio.ts";
 
 const DELIMITER = "\r\n";
 
