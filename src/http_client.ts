@@ -7,8 +7,8 @@ export type HeaderValue = string | number;
 type Proxy = {
   hostname: string,
   port: number,
-  username: string,
-  password: string
+  username?: string,
+  password?: string
 }
 
 export type Request = {
