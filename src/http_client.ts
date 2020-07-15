@@ -1,4 +1,5 @@
 import { BufReader } from "https://deno.land/std@0.61.0/io/bufio.ts";
+import { encode } from "https://deno.land/std@0.61.0/encoding/base64.ts";
 
 const DELIMITER = "\r\n";
 
@@ -45,7 +46,7 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 
   const endpointTls = endpointUrl.protocol === "https:";
   if (proxy && endpointTls) {
-    conn = await connectProxy(endpointUrl, conn, reader);
+    conn = await connectProxy(endpointUrl, conn, reader, proxy);
     reader = new BufReader(conn);
   }
 
@@ -58,13 +59,15 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 }
 
 // for TLS
-async function connectProxy(endpointUrl: URL, conn: Deno.Conn, reader: BufReader): Promise<Deno.Conn> {
+async function connectProxy(endpointUrl: URL, conn: Deno.Conn, reader: BufReader, proxy: Proxy): Promise<Deno.Conn> {
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
+  const auth = encode(proxy.username + ":" + proxy.password);
   const requestLine =
     `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
     `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
+    (proxy.username ?  `Proxy-Authorization: Basic ${auth}${DELIMITER}` : "") +
     `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
