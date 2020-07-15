@@ -45,7 +45,7 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 
   const endpointTls = endpointUrl.protocol === "https:";
   if (proxy && endpointTls) {
-    conn = await connectProxy(endpointUrl, proxy.hostname, conn, reader);
+    conn = await connectProxy(endpointUrl, proxy, conn, reader);
   }
 
   const requestMessage = makeRequestMessage(request, endpointUrl);
@@ -57,14 +57,17 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 }
 
 // for TLS
-async function connectProxy(endpointUrl: URL, proxyHostname: string, conn: Deno.Conn, reader: BufReader): Promise<Deno.Conn> {
+async function connectProxy(endpointUrl: URL, proxy: Proxy, conn: Deno.Conn, reader: BufReader): Promise<Deno.Conn> {
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
   const requestLine =
-    `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}${DELIMITER}`;
+    `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
+    `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
+    `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
+  const decoder = new TextDecoder("utf-8");
   await Deno.writeAll(conn, new TextEncoder().encode(requestLine));
   while (true) {
     const lineResult = await reader.readLine();
@@ -74,10 +77,12 @@ async function connectProxy(endpointUrl: URL, proxyHostname: string, conn: Deno.
     if (lineResult.line.length === 0) {
       break;
     }
+    console.debug(decoder.decode(lineResult.line));
   }
 
   // TODO if 200 response, start TLS
-  return (Deno as any).startTls(conn, { hostname: proxyHostname }); // TODO unstable
+  //const a =  await (Deno as any).startTls(conn, {hostname: endpointUrl.hostname, port: port}); // TODO unstable
+  return await (Deno as any).startTls(conn, {hostname: proxy.hostname, port: proxy.port }); // TODO unstable
 }
 
 export class Header {
@@ -186,4 +191,3 @@ async function makeResponse(reader: BufReader) {
     headers: headers,
   };
 }
-
