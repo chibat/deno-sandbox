@@ -19,3 +19,10 @@ console.log("Body: " + res.body);
 
 // $ /etc/init.d/squid restart
 // /etc/squid/squid.conf
+
+// test
+// * http
+// * https
+// * http + proxy
+// * https + proxy
+

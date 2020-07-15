@@ -29,9 +29,11 @@ export async function exchange(
   request: Request,
   proxy?: Proxy,
 ): Promise<Response> {
+
   const endpointUrl = request.url instanceof URL
     ? request.url
     : new URL(request.url);
+
   const connectTls = !proxy && endpointUrl.protocol === "https:";
   const connectHostname = proxy ? proxy.hostname : endpointUrl.hostname;
 
@@ -51,8 +53,8 @@ export async function exchange(
       : Deno.connect(connectParam));
 
   let reader = new BufReader(conn);
-
   const endpointTls = endpointUrl.protocol === "https:";
+
   if (proxy && endpointTls) {
     conn = await connectProxy(endpointUrl, conn, reader, proxy);
     reader = new BufReader(conn);
@@ -66,6 +68,10 @@ export async function exchange(
   return response;
 }
 
+function getPath(url: URL) {
+  return url.pathname + url.search + url.hash
+}
+
 // for TLS
 async function connectProxy(
   endpointUrl: URL,
@@ -73,6 +79,7 @@ async function connectProxy(
   reader: BufReader,
   proxy: Proxy,
 ): Promise<Deno.Conn> {
+
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
   const requestLine =
@@ -84,6 +91,7 @@ async function connectProxy(
   console.debug(requestLine);
   const decoder = new TextDecoder("utf-8");
   await Deno.writeAll(conn, new TextEncoder().encode(requestLine));
+
   while (true) {
     const lineResult = await reader.readLine();
     if (lineResult == null) {
@@ -109,7 +117,8 @@ export class Header {
   static readonly ACCEPT = "accept";
 }
 
-function makeRequestMessage(request: Request, url: URL) {
+function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
+
   const headerMap = request.headers ? request.headers : new Map();
   const headerArray = new Array<string>();
 
@@ -127,7 +136,9 @@ function makeRequestMessage(request: Request, url: URL) {
     headerArray.push(`${key}: ${value}${DELIMITER}`)
   );
 
-  return `${request.method} ${url.href} HTTP/1.1${DELIMITER}` +
+  const uri = proxy && url.protocol === "http:" ? url.href : getPath(url);
+
+  return `${request.method} ${uri} HTTP/1.1${DELIMITER}` +
     headerArray.join("") +
     DELIMITER +
     (request.body ? request.body : "");
