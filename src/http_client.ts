@@ -6,11 +6,11 @@ const DELIMITER = "\r\n";
 export type HeaderValue = string | number;
 
 type Proxy = {
-  hostname: string,
-  port: number,
-  username?: string,
-  password?: string
-}
+  hostname: string;
+  port: number;
+  username?: string;
+  password?: string;
+};
 
 export type Request = {
   method: "GET" | "POST" | "PUT" | "DELETE";
@@ -25,13 +25,19 @@ export type Response = {
   headers: Map<string, HeaderValue>;
 };
 
-export async function exchange(request: Request, proxy?: Proxy): Promise<Response> {
-
-  const endpointUrl = request.url instanceof URL ? request.url : new URL(request.url);
+export async function exchange(
+  request: Request,
+  proxy?: Proxy,
+): Promise<Response> {
+  const endpointUrl = request.url instanceof URL
+    ? request.url
+    : new URL(request.url);
   const connectTls = !proxy && endpointUrl.protocol === "https:";
   const connectHostname = proxy ? proxy.hostname : endpointUrl.hostname;
 
-  const connectPort = proxy ? proxy.port : endpointUrl.port
+  const connectPort = proxy
+    ? proxy.port
+    : endpointUrl.port
     ? Number.parseInt(endpointUrl.port)
     : (endpointUrl.protocol === "https:")
     ? 443
@@ -40,7 +46,9 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
   const connectParam = { hostname: connectHostname, port: connectPort };
 
   let conn =
-    await (connectTls ? Deno.connectTls(connectParam) : Deno.connect(connectParam));
+    await (connectTls
+      ? Deno.connectTls(connectParam)
+      : Deno.connect(connectParam));
 
   let reader = new BufReader(conn);
 
@@ -59,15 +67,19 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 }
 
 // for TLS
-async function connectProxy(endpointUrl: URL, conn: Deno.Conn, reader: BufReader, proxy: Proxy): Promise<Deno.Conn> {
-
+async function connectProxy(
+  endpointUrl: URL,
+  conn: Deno.Conn,
+  reader: BufReader,
+  proxy: Proxy,
+): Promise<Deno.Conn> {
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
   const auth = encode(proxy.username + ":" + proxy.password);
   const requestLine =
     `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
     `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
-    (proxy.username ?  `Proxy-Authorization: Basic ${auth}${DELIMITER}` : "") +
+    (proxy.username ? `Proxy-Authorization: Basic ${auth}${DELIMITER}` : "") +
     `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
@@ -85,7 +97,10 @@ async function connectProxy(endpointUrl: URL, conn: Deno.Conn, reader: BufReader
   }
 
   // TODO if 200 response, start TLS
-  return (Deno as any).startTls(conn, {hostname: endpointUrl.hostname, port: port}); // TODO unstable
+  return (Deno as any).startTls(
+    conn,
+    { hostname: endpointUrl.hostname, port: port },
+  ); // TODO unstable
 }
 
 export class Header {

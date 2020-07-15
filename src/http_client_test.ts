@@ -8,7 +8,10 @@ const url =
 // const url = "https://github.com/";
 
 const request: Request = { method: "GET", url: url };
-const res = await exchange(request, {hostname: "localhost",port: 3128, username: "user1", password: "test"});
+const res = await exchange(
+  request,
+  { hostname: "localhost", port: 3128, username: "user1", password: "test" },
+);
 console.log("Status: " + res.status);
 console.log("Body: " + res.body);
 
@@ -16,5 +19,3 @@ console.log("Body: " + res.body);
 
 // $ /etc/init.d/squid restart
 // /etc/squid/squid.conf
-
-
