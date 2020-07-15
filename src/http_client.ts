@@ -41,11 +41,12 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
   let conn =
     await (connectTls ? Deno.connectTls(connectParam) : Deno.connect(connectParam));
 
-  const reader = new BufReader(conn);
+  let reader = new BufReader(conn);
 
   const endpointTls = endpointUrl.protocol === "https:";
   if (proxy && endpointTls) {
-    conn = await connectProxy(endpointUrl, proxy, conn, reader);
+    conn = await connectProxy(endpointUrl, conn, reader);
+    reader = new BufReader(conn);
   }
 
   const requestMessage = makeRequestMessage(request, endpointUrl);
@@ -57,7 +58,7 @@ export async function exchange(request: Request, proxy?: Proxy): Promise<Respons
 }
 
 // for TLS
-async function connectProxy(endpointUrl: URL, proxy: Proxy, conn: Deno.Conn, reader: BufReader): Promise<Deno.Conn> {
+async function connectProxy(endpointUrl: URL, conn: Deno.Conn, reader: BufReader): Promise<Deno.Conn> {
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
@@ -81,8 +82,7 @@ async function connectProxy(endpointUrl: URL, proxy: Proxy, conn: Deno.Conn, rea
   }
 
   // TODO if 200 response, start TLS
-  //const a =  await (Deno as any).startTls(conn, {hostname: endpointUrl.hostname, port: port}); // TODO unstable
-  return await (Deno as any).startTls(conn, {hostname: proxy.hostname, port: proxy.port }); // TODO unstable
+  return (Deno as any).startTls(conn, {hostname: endpointUrl.hostname, port: port}); // TODO unstable
 }
 
 export class Header {
@@ -140,6 +140,7 @@ async function makeResponse(reader: BufReader) {
     const name = line.substring(0, position).trim().toLowerCase();
     const value = line.substring(position + 1).trim();
     headers.set(name, value);
+    console.debug(line);
   }
 
   const value = headers.get(Header.CONTENT_LENGTH);
