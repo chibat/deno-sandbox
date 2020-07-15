@@ -75,11 +75,10 @@ async function connectProxy(
 ): Promise<Deno.Conn> {
   const port = endpointUrl.port ? endpointUrl.port : 443;
 
-  const auth = encode(proxy.username + ":" + proxy.password);
   const requestLine =
     `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
     `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
-    (proxy.username ? `Proxy-Authorization: Basic ${auth}${DELIMITER}` : "") +
+    (proxy.username ? `Proxy-Authorization: Basic ${encode(proxy.username + ":" + proxy.password)}${DELIMITER}` : "") +
     `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
