@@ -1,8 +1,6 @@
 import { BufReader } from "https://deno.land/std@0.61.0/io/bufio.ts";
 import { encode } from "https://deno.land/std@0.61.0/encoding/base64.ts";
 
-const DELIMITER = "\r\n";
-
 export type PasswordCredential = {
   name: string;
   password: string;
@@ -24,11 +22,21 @@ export type Request = {
   credentials?: PasswordCredential;
 };
 
-export type Response = {
-  body?: string;
-  status: number | null;
-  headers?: Headers;
+export class Response {
+  readonly body?: string;
+  readonly status?: number | null;
+  readonly headers?: Headers;
+  constructor(init: {body?: string, status?: number | null, headers?: Headers}) {
+    this.body = init.body;
+    this.status = init.status;
+    this.headers = init.headers;
+  }
+  json<T>(reviver?: ((this: any, key: string, value: any) => any) | undefined): T {
+    return this.body ? JSON.parse(this.body, reviver) : null;
+  }
 };
+
+const DELIMITER = "\r\n";
 
 export async function exchange(
   request: Request,
@@ -164,7 +172,7 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
     bodyString;
 }
 
-async function makeResponse(reader: BufReader) {
+async function makeResponse(reader: BufReader): Promise<Response> {
   const decoder = new TextDecoder("utf-8");
   let body = "";
 
@@ -234,9 +242,9 @@ async function makeResponse(reader: BufReader) {
     body = decoder.decode(bodyArray);
   }
   console.debug(status);
-  return {
+  return new Response({
     status: status,
     body: body,
     headers: headers,
-  };
+  });
 }
