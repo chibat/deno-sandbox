@@ -86,16 +86,25 @@ async function connectProxy(
 ): Promise<Deno.Conn> {
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
+  const headers = new Headers();
+  headers.set("Host", `${endpointUrl.hostname}:${port} HTTP/1.1`);
+  headers.set("Proxy-Connection", `Keep-Alive`);
+  if (proxy.credentials) {
+    headers.set("Proxy-Authorization", `Basic ${encode(proxy.credentials.name + ":" + proxy.credentials.password)}`);
+  }
 
-  const requestLine =
-    `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
-    `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
-    (proxy.credentials ? `Proxy-Authorization: Basic ${encode(proxy.credentials.name + ":" + proxy.credentials.password)}${DELIMITER}` : "") +
-    `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
+  const headerArray = new Array<string>();
+  headers.forEach((value, key) =>
+    headerArray.push(`${key}: ${value}${DELIMITER}`)
+  );
+  
+  const connectRequest = `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
+    headerArray.join("") +
+    DELIMITER;
 
-  console.debug(requestLine);
+  console.debug(connectRequest);
   const decoder = new TextDecoder("utf-8");
-  await Deno.writeAll(conn, new TextEncoder().encode(requestLine));
+  await Deno.writeAll(conn, new TextEncoder().encode(connectRequest));
 
   while (true) {
     const lineResult = await reader.readLine();
