@@ -5,18 +5,23 @@ const DELIMITER = "\r\n";
 
 export type HeaderValue = string | number;
 
+type PasswordCredential = {
+  name: string;
+  password: string;
+}
+
 type Proxy = {
   hostname: string;
   port: number;
-  username?: string;
-  password?: string;
+  credentials?: PasswordCredential;
 };
 
 export type Request = {
   method: "GET" | "POST" | "PUT" | "DELETE";
   url: URL | string;
-  body?: string;
+  body?: string | URLSearchParams;
   headers?: Map<string, HeaderValue>;
+  credentials?: PasswordCredential;
 };
 
 export type Response = {
@@ -85,7 +90,7 @@ async function connectProxy(
   const requestLine =
     `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
     `Host: ${endpointUrl.hostname}:${port}${DELIMITER}` +
-    (proxy.username ? `Proxy-Authorization: Basic ${encode(proxy.username + ":" + proxy.password)}${DELIMITER}` : "") +
+    (proxy.credentials ? `Proxy-Authorization: Basic ${encode(proxy.credentials.name + ":" + proxy.credentials.password)}${DELIMITER}` : "") +
     `Proxy-Connection: Keep-Alive${DELIMITER}${DELIMITER}`;
 
   console.debug(requestLine);
@@ -115,12 +120,14 @@ export class Header {
   static readonly TRANSFER_ENCODING = "transfer-encoding";
   static readonly HOST = "host";
   static readonly ACCEPT = "accept";
+  static readonly AUTHORIZATION = "authorization";
 }
 
 function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
 
   const headerMap = request.headers ? request.headers : new Map();
   const headerArray = new Array<string>();
+  const bodyString = request.body ? request.body.toString() : "";
 
   if (!headerMap.has(Header.HOST)) {
     headerMap.set(Header.HOST, url.hostname);
@@ -128,9 +135,12 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
   if (!headerMap.has(Header.ACCEPT)) {
     headerMap.set(Header.ACCEPT, "*/*");
   }
-  if (!headerMap.has(Header.CONTENT_LENGTH) && request.body) {
-    const requestBodyLength = (new Blob([request.body])).size;
+  if (!headerMap.has(Header.CONTENT_LENGTH) && bodyString) {
+    const requestBodyLength = (new Blob([bodyString])).size;
     headerMap.set(Header.CONTENT_LENGTH, requestBodyLength);
+  }
+  if (!headerMap.has(Header.AUTHORIZATION) && request.credentials) {
+    headerMap.set(Header.AUTHORIZATION, `Basic ${encode(request.credentials.name + ":" + request.credentials.password)}${DELIMITER}`);
   }
   headerMap.forEach((value, key) =>
     headerArray.push(`${key}: ${value}${DELIMITER}`)
@@ -141,7 +151,7 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
   return `${request.method} ${uri} HTTP/1.1${DELIMITER}` +
     headerArray.join("") +
     DELIMITER +
-    (request.body ? request.body : "");
+    bodyString;
 }
 
 async function makeResponse(reader: BufReader) {

@@ -10,7 +10,7 @@ const url =
 const request: Request = { method: "GET", url: url };
 const res = await exchange(
   request,
-  { hostname: "localhost", port: 3128, username: "user1", password: "test" },
+  { hostname: "localhost", port: 3128, credentials: {name: "user1", password: "test"}},
 );
 console.log("Status: " + res.status);
 console.log("Body: " + res.body);
