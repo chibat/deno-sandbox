@@ -4,7 +4,7 @@ import { encode } from "https://deno.land/std@0.61.0/encoding/base64.ts";
 export type PasswordCredential = {
   name: string;
   password: string;
-}
+};
 
 export type Proxy = {
   hostname: string;
@@ -26,15 +26,19 @@ export class Response {
   readonly body?: string;
   readonly status?: number | null;
   readonly headers?: Headers;
-  constructor(init: {body?: string, status?: number | null, headers?: Headers}) {
+  constructor(
+    init: { body?: string; status?: number | null; headers?: Headers },
+  ) {
     this.body = init.body;
     this.status = init.status;
     this.headers = init.headers;
   }
-  json<T>(reviver?: ((this: any, key: string, value: any) => any) | undefined): T {
+  json<T>(
+    reviver?: ((this: any, key: string, value: any) => any) | undefined,
+  ): T {
     return this.body ? JSON.parse(this.body, reviver) : null;
   }
-};
+}
 
 const DELIMITER = "\r\n";
 
@@ -82,7 +86,7 @@ export async function exchange(
 }
 
 function getPath(url: URL) {
-  return url.pathname + url.search + url.hash
+  return url.pathname + url.search + url.hash;
 }
 
 // for TLS
@@ -95,18 +99,24 @@ async function connectProxy(
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
   const headers = new Headers();
-  headers.set(Header.HOST, `${endpointUrl.hostname}:${port} HTTP/1.1`);
+  headers.set(Header.HOST, `${endpointUrl.hostname}:${port}`);
   headers.set("Proxy-Connection", `Keep-Alive`);
   if (proxy.credentials) {
-    headers.set("Proxy-Authorization", `Basic ${encode(proxy.credentials.name + ":" + proxy.credentials.password)}`);
+    headers.set(
+      "Proxy-Authorization",
+      `Basic ${
+        encode(proxy.credentials.name + ":" + proxy.credentials.password)
+      }`,
+    );
   }
 
   const headerArray = new Array<string>();
   headers.forEach((value, key) =>
     headerArray.push(`${key}: ${value}${DELIMITER}`)
   );
-  
-  const connectRequest = `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
+
+  const connectRequest =
+    `CONNECT ${endpointUrl.hostname}:${port} HTTP/1.1${DELIMITER}` +
     headerArray.join("") +
     DELIMITER;
 
@@ -133,27 +143,34 @@ async function connectProxy(
 }
 
 export class Header {
-  static readonly CONTENT_LENGTH = "content-length";
-  static readonly TRANSFER_ENCODING = "transfer-encoding";
-  static readonly HOST = "host";
-  static readonly ACCEPT = "accept";
-  static readonly AUTHORIZATION = "authorization";
+  static readonly CONTENT_LENGTH = "Content-Length";
+  static readonly CONTENT_TYPE = "Content-Type";
+  static readonly TRANSFER_ENCODING = "Transfer-Encoding";
+  static readonly HOST = "Host";
+  static readonly ACCEPT = "Accept";
+  static readonly AUTHORIZATION = "Authorization";
 }
 
 function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
 
   const method = request.method ? request.method : "GET";
   const headers = request.headers ? request.headers : new Headers();
-  const bodyString = typeof request.body === "string" ? request.body : request.body instanceof URLSearchParams ? request.body.toString() : request.body instanceof Object ? JSON.stringify(request.body) : "";
+  const bodyString = typeof request.body === "string"
+    ? request.body
+    : request.body instanceof URLSearchParams
+    ? request.body.toString()
+    : request.body instanceof Object
+    ? JSON.stringify(request.body)
+    : "";
 
   if (!headers.has(Header.HOST)) {
     headers.set(Header.HOST, url.hostname);
   }
-  if (request.body && !headers.has("Content-Type")) {
+  if (request.body && !headers.has(Header.CONTENT_TYPE)) {
     if (request.body instanceof URLSearchParams) {
-      headers.set("Content-Type", "application/x-www-form-urlencoded");
+      headers.set(Header.CONTENT_TYPE, "application/x-www-form-urlencoded");
     } else if (request.body instanceof Object) {
-      headers.set("Content-Type", "application/json; charset=utf-8");
+      headers.set(Header.CONTENT_TYPE, "application/json; charset=utf-8");
     }
   }
   if (!headers.has(Header.ACCEPT)) {
@@ -164,7 +181,12 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
     headers.set(Header.CONTENT_LENGTH, requestBodyLength.toString());
   }
   if (!headers.has(Header.AUTHORIZATION) && request.credentials) {
-    headers.set(Header.AUTHORIZATION, `Basic ${encode(request.credentials.name + ":" + request.credentials.password)}${DELIMITER}`);
+    headers.set(
+      Header.AUTHORIZATION,
+      `Basic ${
+        encode(request.credentials.name + ":" + request.credentials.password)
+      }${DELIMITER}`,
+    );
   }
   const headerArray = new Array<string>();
   headers.forEach((value, key) =>
@@ -200,7 +222,7 @@ async function makeResponse(reader: BufReader): Promise<Response> {
 
     const line = decoder.decode(lineResult.line);
     const position = line.indexOf(":");
-    const name = line.substring(0, position).trim().toLowerCase();
+    const name = line.substring(0, position).trim();
     const value = line.substring(position + 1).trim();
     headers.set(name, value);
     console.debug(line);

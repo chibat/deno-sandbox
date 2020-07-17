@@ -1,8 +1,6 @@
 
-// const b: any = new URLSearchParams();
-const b: any = "";
-console.log(typeof b);
-console.log(b instanceof URLSearchParams);
-console.log(b instanceof Object);
 
+const h = new Headers();
+h.set("AAA", "BBB");
+console.log(h);
 
