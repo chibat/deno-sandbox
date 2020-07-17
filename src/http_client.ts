@@ -3,31 +3,31 @@ import { encode } from "https://deno.land/std@0.61.0/encoding/base64.ts";
 
 const DELIMITER = "\r\n";
 
-export type HeaderValue = string | number;
-
-type PasswordCredential = {
+export type PasswordCredential = {
   name: string;
   password: string;
 }
 
-type Proxy = {
+export type Proxy = {
   hostname: string;
   port: number;
   credentials?: PasswordCredential;
 };
 
+export type Method = "GET" | "POST" | "PUT" | "DELETE";
+
 export type Request = {
-  method: "GET" | "POST" | "PUT" | "DELETE";
+  method?: Method;
   url: URL | string;
   body?: string | URLSearchParams;
-  headers?: Map<string, HeaderValue>;
+  headers?: Headers;
   credentials?: PasswordCredential;
 };
 
 export type Response = {
-  body: string;
+  body?: string;
   status: number | null;
-  headers: Map<string, HeaderValue>;
+  headers?: Headers;
 };
 
 export async function exchange(
@@ -125,30 +125,31 @@ export class Header {
 
 function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
 
-  const headerMap = request.headers ? request.headers : new Map();
+  const method = request.method ? request.method : "GET";
+  const headers = request.headers ? request.headers : new Headers();
   const headerArray = new Array<string>();
   const bodyString = request.body ? request.body.toString() : "";
 
-  if (!headerMap.has(Header.HOST)) {
-    headerMap.set(Header.HOST, url.hostname);
+  if (!headers.has(Header.HOST)) {
+    headers.set(Header.HOST, url.hostname);
   }
-  if (!headerMap.has(Header.ACCEPT)) {
-    headerMap.set(Header.ACCEPT, "*/*");
+  if (!headers.has(Header.ACCEPT)) {
+    headers.set(Header.ACCEPT, "*/*");
   }
-  if (!headerMap.has(Header.CONTENT_LENGTH) && bodyString) {
+  if (!headers.has(Header.CONTENT_LENGTH) && bodyString) {
     const requestBodyLength = (new Blob([bodyString])).size;
-    headerMap.set(Header.CONTENT_LENGTH, requestBodyLength);
+    headers.set(Header.CONTENT_LENGTH, requestBodyLength.toString());
   }
-  if (!headerMap.has(Header.AUTHORIZATION) && request.credentials) {
-    headerMap.set(Header.AUTHORIZATION, `Basic ${encode(request.credentials.name + ":" + request.credentials.password)}${DELIMITER}`);
+  if (!headers.has(Header.AUTHORIZATION) && request.credentials) {
+    headers.set(Header.AUTHORIZATION, `Basic ${encode(request.credentials.name + ":" + request.credentials.password)}${DELIMITER}`);
   }
-  headerMap.forEach((value, key) =>
+  headers.forEach((value, key) =>
     headerArray.push(`${key}: ${value}${DELIMITER}`)
   );
 
   const uri = proxy && url.protocol === "http:" ? url.href : getPath(url);
 
-  return `${request.method} ${uri} HTTP/1.1${DELIMITER}` +
+  return `${method} ${uri} HTTP/1.1${DELIMITER}` +
     headerArray.join("") +
     DELIMITER +
     bodyString;
@@ -163,7 +164,7 @@ async function makeResponse(reader: BufReader) {
     ? Number.parseInt(decoder.decode((lineResult)?.line).split(" ")[1])
     : null;
 
-  const headers = new Map<string, string>();
+  const headers = new Headers();
   while (true) {
     const lineResult = await reader.readLine();
     if (lineResult == null) {

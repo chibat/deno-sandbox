@@ -12,4 +12,14 @@ url.searchParams.append("bbb", "ccc");
 url.searchParams.append("bbb", "ccc");
 console.log(url.searchParams.toString());
 
+const headers = new Headers();
+headers.append("nnn", "vvvv");
+headers.append("nnn", "vvvv");
+headers.forEach((value, key, p) => {
+  console.log(`${key}: ${value}`);
+  p.forEach((value2, key2) => {
+    console.log(`${key2}: ${value2}`);
+  });
+});
+
 
