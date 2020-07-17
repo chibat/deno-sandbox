@@ -17,7 +17,7 @@ export type Method = "GET" | "POST" | "PUT" | "DELETE";
 export type Request = {
   method?: Method;
   url: URL | string;
-  body?: string | URLSearchParams;
+  body?: string | URLSearchParams | object;
   headers?: Headers;
   credentials?: PasswordCredential;
 };
@@ -95,7 +95,7 @@ async function connectProxy(
 
   const port = endpointUrl.port ? endpointUrl.port : 443;
   const headers = new Headers();
-  headers.set("Host", `${endpointUrl.hostname}:${port} HTTP/1.1`);
+  headers.set(Header.HOST, `${endpointUrl.hostname}:${port} HTTP/1.1`);
   headers.set("Proxy-Connection", `Keep-Alive`);
   if (proxy.credentials) {
     headers.set("Proxy-Authorization", `Basic ${encode(proxy.credentials.name + ":" + proxy.credentials.password)}`);
@@ -144,11 +144,17 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
 
   const method = request.method ? request.method : "GET";
   const headers = request.headers ? request.headers : new Headers();
-  const headerArray = new Array<string>();
-  const bodyString = request.body ? request.body.toString() : "";
+  const bodyString = typeof request.body === "string" ? request.body : request.body instanceof URLSearchParams ? request.body.toString() : request.body instanceof Object ? JSON.stringify(request.body) : "";
 
   if (!headers.has(Header.HOST)) {
     headers.set(Header.HOST, url.hostname);
+  }
+  if (request.body && !headers.has("Content-Type")) {
+    if (request.body instanceof URLSearchParams) {
+      headers.set("Content-Type", "application/x-www-form-urlencoded");
+    } else if (request.body instanceof Object) {
+      headers.set("Content-Type", "application/json; charset=utf-8");
+    }
   }
   if (!headers.has(Header.ACCEPT)) {
     headers.set(Header.ACCEPT, "*/*");
@@ -160,6 +166,7 @@ function makeRequestMessage(request: Request, url: URL, proxy?: Proxy) {
   if (!headers.has(Header.AUTHORIZATION) && request.credentials) {
     headers.set(Header.AUTHORIZATION, `Basic ${encode(request.credentials.name + ":" + request.credentials.password)}${DELIMITER}`);
   }
+  const headerArray = new Array<string>();
   headers.forEach((value, key) =>
     headerArray.push(`${key}: ${value}${DELIMITER}`)
   );
