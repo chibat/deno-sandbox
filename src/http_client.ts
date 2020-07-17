@@ -123,6 +123,19 @@ async function connectProxy(
   console.debug(connectRequest);
   const decoder = new TextDecoder("utf-8");
   await Deno.writeAll(conn, new TextEncoder().encode(connectRequest));
+  const statusLine = await reader.readLine();
+  if (statusLine) {
+    console.debug(decoder.decode(statusLine.line));
+    // TODO
+    const status = statusLine
+      ? Number.parseInt(decoder.decode((statusLine)?.line).split(" ")[1])
+      : null;
+    if (status !== 200) {
+      throw new Error("CONNECT, response status error");
+    }
+  } else {
+    throw new Error("CONNECT");
+  }
 
   while (true) {
     const lineResult = await reader.readLine();
