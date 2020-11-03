@@ -1,6 +1,5 @@
+// denow run --allow-read --allow-run aaa.ts
 
 
-const h = new Headers();
-h.set("AAA", "BBB");
-console.log(h);
-
+const cmd = ["help"];
+Deno.exit((await Deno.run({cmd: [Deno.execPath()].concat(cmd)}).status()).code);
